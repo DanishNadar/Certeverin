@@ -1,0 +1,4 @@
+# One public Lever company slug per line.
+# Examples come from URLs like https://jobs.lever.co/leverdemo
+# You can also paste full URLs; Certeverin will keep the last path segment.
+leverdemo

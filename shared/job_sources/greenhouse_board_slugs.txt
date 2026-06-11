@@ -1,0 +1,4 @@
+# One public Greenhouse board slug per line.
+# Examples come from URLs like https://boards.greenhouse.io/stripe
+# You can also paste full URLs; Certeverin will keep the last path segment.
+stripe

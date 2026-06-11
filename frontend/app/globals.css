@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: #10233f;
+  background: #f5f7fb;
+}
+
+button, input, select, textarea {
+  font: inherit;
+}
+
+.focus-ring:focus {
+  outline: 3px solid rgba(15, 118, 110, 0.25);
+  outline-offset: 2px;
+}
+

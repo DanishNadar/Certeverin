@@ -1,0 +1,9 @@
+final_score:
+  job_skill_demand_score: 0.30
+  required_skill_coverage_score: 0.20
+  role_alignment_score: 0.15
+  certification_provider_signal_score: 0.10
+  cost_benefit_score: 0.10
+  beginner_accessibility_score: 0.10
+  evidence_confidence_score: 0.05
+

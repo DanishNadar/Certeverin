@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Local databases and env
+*.db
+.env
+.env.local
+.env.example
+
+# Node / Next
+node_modules/
+.next/
+out/
+
+# Logs
+*.log
+
+# Keep generated PDF examples if intentionally created.
+!backend/generated_reports/*.pdf
+
