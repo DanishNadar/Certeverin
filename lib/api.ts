@@ -7,6 +7,9 @@ export type SkillStat = {
   job_frequency: number;
   required_mentions: number;
   preferred_mentions: number;
+  total_mentions: number;
+  // Mentions in postings that never labelled a requirements section.
+  unlabeled_mentions: number;
   confidence: number;
   snippets: string[];
 };

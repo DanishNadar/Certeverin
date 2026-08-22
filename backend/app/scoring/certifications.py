@@ -17,9 +17,10 @@ def skill_statistics(db: Session, run_id: int) -> list[dict]:
     for mention in mentions:
         row = by_skill.setdefault(
             mention.skill,
-            {"skill": mention.skill, "category": mention.category, "jobs": set(), "required": 0, "preferred": 0, "snippets": []},
+            {"skill": mention.skill, "category": mention.category, "jobs": set(), "required": 0, "preferred": 0, "total": 0, "snippets": []},
         )
         row["jobs"].add(mention.job_id)
+        row["total"] += 1
         if mention.section == "required":
             row["required"] += 1
         if mention.section == "preferred":
@@ -38,6 +39,9 @@ def skill_statistics(db: Session, run_id: int) -> list[dict]:
                 "job_frequency": round(frequency, 3),
                 "required_mentions": row["required"],
                 "preferred_mentions": row["preferred"],
+                "total_mentions": row["total"],
+                # Postings that never label a requirements section land here.
+                "unlabeled_mentions": row["total"] - row["required"] - row["preferred"],
                 "confidence": round(min(0.99, 0.65 + frequency * 0.3), 2),
                 "snippets": row["snippets"],
             }
