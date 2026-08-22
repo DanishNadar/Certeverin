@@ -190,6 +190,15 @@ def friendly_cost(cost) -> str:
     return f"${cost:,.0f} exam fee"
 
 
+def count_by(items: list, key) -> list[tuple[str, int]]:
+    """Return stable, largest-first counts for categorical report charts."""
+    counts: dict[str, int] = {}
+    for item in items:
+        label = str(key(item) or "Unknown")
+        counts[label] = counts.get(label, 0) + 1
+    return sorted(counts.items(), key=lambda item: (-item[1], item[0].lower()))
+
+
 # --------------------------------------------------------------------------
 # Drawing helpers
 # --------------------------------------------------------------------------
@@ -406,7 +415,7 @@ def build_report(db: Session, run: JobSearchRun, target: Path | str | IO[bytes])
     story.append(PageBreak())
     story += coverage_section(certs, styles)
     story.append(PageBreak())
-    story += evidence_section(skills, styles)
+    story += evidence_section(skills, jobs, styles)
     story.append(PageBreak())
     story += methodology_section(run, jobs, logs, summary, certs, styles)
 
@@ -530,6 +539,17 @@ def recommendation_section(certs: list[dict], summary: dict, styles: dict) -> li
         )
     )
     story.append(Spacer(1, 4))
+
+    recommendations = [str(item).strip() for item in (summary.get("recommendations") or []) if str(item).strip()]
+    if recommendations:
+        story.append(para("The decision in plain language", styles["h2"]))
+        for index, item in enumerate(recommendations, start=1):
+            prefix, separator, remainder = item.partition(". ")
+            if separator and prefix.isdigit():
+                item = remainder
+            story.append(Paragraph(f"<b>{index}.</b>&nbsp;&nbsp;{escape(item)}", styles["bullet"]))
+        story.append(Spacer(1, 2))
+
     story.append(
         para(
             "Recommendation strength is a 0-100% blend of seven factors: a certification scores well only when it teaches "
@@ -697,6 +717,28 @@ def ranking_section(certs: list[dict], styles: dict) -> list:
     )
     story.append(para("Recommendation strength for each certification. The teal bar is the top pick.", styles["caption"]))
 
+    providers = count_by(certs, lambda cert: cert.get("provider"))
+    if providers:
+        max_provider_count = max(count for _, count in providers)
+        story.append(para("Certification providers reviewed", styles["h2"]))
+        story.append(
+            hbar_chart(
+                [
+                    (provider, count / max_provider_count * 100, f"{count} certification{'s' if count != 1 else ''}")
+                    for provider, count in providers
+                ],
+                label_width=150,
+                value_width=92,
+                row_height=17,
+            )
+        )
+        story.append(
+            para(
+                "This is a coverage check, not a quality score. It shows whether the comparison leaned too heavily on one provider.",
+                styles["caption"],
+            )
+        )
+
     story.append(para("Side-by-side comparison", styles["h2"]))
     rows = []
     for index, cert in enumerate(certs, start=1):
@@ -772,7 +814,7 @@ def coverage_section(certs: list[dict], styles: dict) -> list:
     return story
 
 
-def evidence_section(skills: list[dict], styles: dict) -> list:
+def evidence_section(skills: list[dict], jobs: list, styles: dict) -> list:
     story = [para("Evidence from the job postings", styles["h1"])]
     story.append(
         para(
@@ -784,22 +826,65 @@ def evidence_section(skills: list[dict], styles: dict) -> list:
     quoted = [skill for skill in skills[:10] if skill.get("snippets")]
     if not quoted:
         story.append(callout("No posting excerpts were captured for this run.", styles))
-        return story
+    else:
+        for skill in quoted:
+            block = [
+                Paragraph(
+                    f"{escape(skill['skill'])} <font size=8 color='#64748b'>- {skill['job_count']} postings ({skill['job_frequency']:.0%})</font>",
+                    styles["h2"],
+                )
+            ]
+            for snippet in skill["snippets"][:2]:
+                text = clean_snippet(snippet)
+                if not text:
+                    continue
+                block.append(Paragraph(f'"{escape(text)}"', styles["quote"]))
+            story.append(KeepTogether(block))
+            story.append(Spacer(1, 4))
 
-    for skill in quoted:
-        block = [
-            Paragraph(
-                f"{escape(skill['skill'])} <font size=8 color='#64748b'>- {skill['job_count']} postings ({skill['job_frequency']:.0%})</font>",
-                styles["h2"],
+    story.append(PageBreak())
+    story.append(para("Postings behind the analysis", styles["h1"]))
+    story.append(
+        para(
+            "These source records make the analysis auditable without copying full job descriptions. Open a role name "
+            "to review the original posting when the source still has it available.",
+            styles["lead"],
+        )
+    )
+    posting_rows = []
+    for job in jobs[:30]:
+        url = escape(job.source_url or job.apply_url or "")
+        title = escape(job.title or "Untitled role")
+        linked_title = f'<a href="{url}" color="#0f766e">{title}</a>' if url else title
+        posting_rows.append(
+            [
+                para(job.source, styles["td_bold"]),
+                Paragraph(
+                    f"{linked_title}<br/><font size=7 color='#64748b'>{escape(job.company or 'Company not listed')}</font>",
+                    styles["td_bold"],
+                ),
+                para(job.location or "Not listed", styles["td"]),
+                para(job.date_posted or "Not listed", styles["td"]),
+            ]
+        )
+    story.append(
+        data_table(
+            ["Source", "Role and employer", "Location", "Posted"],
+            posting_rows,
+            [65, 215, 135, CONTENT_WIDTH - 415],
+            styles,
+            padding=3,
+        )
+    )
+    if len(jobs) > len(posting_rows):
+        story.append(
+            para(
+                f"Showing 30 of {len(jobs):,} analyzed postings to keep the report readable. Aggregate charts and scores use all {len(jobs):,} postings.",
+                styles["caption"],
             )
-        ]
-        for snippet in skill["snippets"][:2]:
-            text = clean_snippet(snippet)
-            if not text:
-                continue
-            block.append(Paragraph(f'"{escape(text)}"', styles["quote"]))
-        story.append(KeepTogether(block))
-        story.append(Spacer(1, 4))
+        )
+    else:
+        story.append(para(f"All {len(jobs):,} analyzed postings are listed above.", styles["caption"]))
     return story
 
 
@@ -863,6 +948,18 @@ def methodology_section(run: JobSearchRun, jobs: list, logs: list, summary: dict
     by_source: dict[str, int] = {}
     for job in jobs:
         by_source[job.source] = by_source.get(job.source, 0) + 1
+    source_counts = sorted(by_source.items(), key=lambda item: (-item[1], item[0].lower()))
+    if source_counts:
+        max_source_count = max(count for _, count in source_counts)
+        story.append(
+            hbar_chart(
+                [(source, count / max_source_count * 100, f"{count:,} postings") for source, count in source_counts],
+                label_width=110,
+                value_width=90,
+                row_height=18,
+            )
+        )
+        story.append(para("Posting count by source. Bar length is relative to the largest source in this run.", styles["caption"]))
     story.append(
         data_table(
             ["Source", "Postings", "Result", "Detail"],
