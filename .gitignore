@@ -16,10 +16,14 @@ venv/
 node_modules/
 .next/
 out/
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# Vercel
+.vercel
 
 # Logs
 *.log
 
 # Keep generated PDF examples if intentionally created.
 !backend/generated_reports/*.pdf
-

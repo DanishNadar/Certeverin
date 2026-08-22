@@ -2,21 +2,19 @@ import asyncio
 
 import typer
 
-from app.db.session import SessionLocal, init_db
+from app.db.session import SessionLocal, bootstrap_database
 from app.reports.pdf import generate_pdf
 from app.schemas.api import SearchRunCreate
 from app.scoring.certifications import score_certifications
 from app.services.pipeline import run_analysis
-from app.services.seeds import seed_all, seed_certifications
+from app.services.seeds import seed_certifications
 
 app = typer.Typer(help="Certeverin command line tools")
 
 
 @app.callback()
 def bootstrap():
-    init_db()
-    with SessionLocal() as db:
-        seed_all(db)
+    bootstrap_database()
 
 
 @app.command("ingest-jobs")

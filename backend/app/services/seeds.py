@@ -1,5 +1,6 @@
 import json
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -41,7 +42,22 @@ def seed_certifications(db: Session) -> None:
     db.commit()
 
 
-def seed_all(db: Session) -> None:
-    seed_skills(db)
-    seed_certifications(db)
+def is_seeded(db: Session) -> bool:
+    return bool(db.query(NormalizedSkill.id).first() and db.query(Certification.id).first())
+
+
+def seed_all(db: Session, force: bool = False) -> None:
+    """Load the skill taxonomy and certification catalog if they are missing.
+
+    Two probe queries on the warm path keeps serverless cold starts cheap. A
+    concurrent cold start can race us to the same rows, which surfaces as a
+    unique-constraint error and means the work is already done.
+    """
+    if not force and is_seeded(db):
+        return
+    try:
+        seed_skills(db)
+        seed_certifications(db)
+    except IntegrityError:
+        db.rollback()
 

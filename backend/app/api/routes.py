@@ -1,10 +1,10 @@
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.db.session import get_db
+from app.db.session import bootstrap_database, get_db
 from app.models.entities import Certification, JobCertificationMatch, JobPosting, JobSearchRun, ReportExport
 from app.nlp.skills import normalize_skill
 from app.reports.pdf import generate_pdf
@@ -61,9 +61,18 @@ def create_report(run_id: int, db: Session = Depends(get_db)):
 @router.get("/reports/{report_id}")
 def download_report(report_id: int, db: Session = Depends(get_db)):
     report = db.get(ReportExport, report_id)
-    if not report or not Path(report.file_path).exists():
+    if not report:
         raise HTTPException(status_code=404, detail="Report not found")
-    return FileResponse(report.file_path, media_type="application/pdf", filename=Path(report.file_path).name)
+    filename = f"certeverin-run-{report.run_id}.pdf"
+    if report.content:
+        return Response(
+            content=report.content,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    if report.file_path and Path(report.file_path).exists():
+        return FileResponse(report.file_path, media_type="application/pdf", filename=Path(report.file_path).name)
+    raise HTTPException(status_code=404, detail="Report file is no longer available. Generate the report again.")
 
 
 @router.get("/certifications")
@@ -75,6 +84,20 @@ def certifications(db: Session = Depends(get_db)):
 def refresh_certifications(db: Session = Depends(get_db)):
     seed_certifications(db)
     return {"status": "refreshed", "source": "seed_official_pages"}
+
+
+@router.get("/health")
+def api_health():
+    from app.main import health_payload
+
+    return health_payload()
+
+
+@router.post("/admin/bootstrap")
+def admin_bootstrap():
+    """Force schema creation and seed reload. Safe to re-run."""
+    bootstrap_database(force=True)
+    return {"status": "bootstrapped"}
 
 
 @router.post("/skills/normalize")

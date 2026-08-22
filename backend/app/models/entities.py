@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -164,6 +164,9 @@ class ReportExport(Base):
     run_id: Mapped[int] = mapped_column(ForeignKey("job_search_runs.id"))
     file_path: Mapped[str] = mapped_column(Text)
     format: Mapped[str] = mapped_column(String(20), default="pdf")
+    # Serverless instances have a read-only, per-instance filesystem, so the
+    # rendered PDF is stored here and file_path is only a local convenience.
+    content: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

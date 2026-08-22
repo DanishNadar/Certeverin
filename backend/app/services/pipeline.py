@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -46,40 +47,47 @@ async def run_analysis(db: Session, request: SearchRunCreate) -> JobSearchRun:
     db.refresh(run)
 
     titles = [request.target_title, *request.related_titles]
-    collected = []
+    # Plan every fetch first so they can run concurrently. Sources are otherwise
+    # awaited one at a time, which blows past the serverless request timeout.
+    planned: list[tuple[str, str, int]] = []
     for source in request.sources:
         requested_limit = source_limit(request, source)
-        connector_cls = CONNECTORS.get(source)
-        if not connector_cls:
+        if source not in CONNECTORS:
             db.add(SourceLog(run_id=run.id, source=source, status="skipped", message="Unknown source"))
             continue
-        connector = connector_cls()
+        skip_reason = missing_requirements(settings, source)
+        if skip_reason:
+            db.add(SourceLog(run_id=run.id, source=source, status="skipped", message=skip_reason))
+            continue
         if source == "demo":
-            jobs = await connector.fetch(request.target_title, request.location, requested_limit)
-            collected.extend(jobs)
-            db.add(SourceLog(run_id=run.id, source=source, status="ok", message=f"Fetched {len(jobs)} of {requested_limit} requested labeled demo jobs"))
+            planned.append((source, request.target_title, requested_limit))
             continue
-        if source == "adzuna" and (not settings.adzuna_app_id or not settings.adzuna_app_key):
-            db.add(SourceLog(run_id=run.id, source=source, status="skipped", message="Missing ADZUNA_APP_ID or ADZUNA_APP_KEY."))
-            continue
-        if source == "usajobs" and (not settings.usa_jobs_email or not settings.usa_jobs_api_key):
-            db.add(SourceLog(run_id=run.id, source=source, status="skipped", message="Missing USA_JOBS_EMAIL or USA_JOBS_API_KEY."))
-            continue
-        if source == "greenhouse" and not (settings.greenhouse_board_slugs or settings.greenhouse_board_slugs_file):
-            db.add(SourceLog(run_id=run.id, source=source, status="skipped", message="Missing GREENHOUSE_BOARD_SLUGS or GREENHOUSE_BOARD_SLUGS_FILE. Use public board slugs from boards.greenhouse.io URLs."))
-            continue
-        if source == "lever" and not (settings.lever_company_names or settings.lever_company_names_file):
-            db.add(SourceLog(run_id=run.id, source=source, status="skipped", message="Missing LEVER_COMPANY_NAMES or LEVER_COMPANY_NAMES_FILE. Use public company slugs from jobs.lever.co URLs."))
-            continue
+        title_limit = max(1, requested_limit // min(len(titles), 2))
         for title in titles[:2]:
-            try:
-                title_limit = max(1, requested_limit // min(len(titles), 2))
-                jobs = await connector.fetch(title, request.location, title_limit)
-                collected.extend(jobs)
-                status = "ok" if jobs else "empty"
-                db.add(SourceLog(run_id=run.id, source=source, status=status, message=f"Fetched {len(jobs)} of {title_limit} requested jobs for {title}"))
-            except Exception as exc:
-                db.add(SourceLog(run_id=run.id, source=source, status="error", message=str(exc)))
+            planned.append((source, title, title_limit))
+
+    results = await asyncio.gather(
+        *(CONNECTORS[source]().fetch(title, request.location, limit) for source, title, limit in planned),
+        return_exceptions=True,
+    )
+
+    collected = []
+    for (source, title, limit), result in zip(planned, results):
+        if isinstance(result, BaseException):
+            db.add(SourceLog(run_id=run.id, source=source, status="error", message=str(result)))
+            continue
+        collected.extend(result)
+        if source == "demo":
+            db.add(SourceLog(run_id=run.id, source=source, status="ok", message=f"Fetched {len(result)} of {limit} requested labeled demo jobs"))
+            continue
+        db.add(
+            SourceLog(
+                run_id=run.id,
+                source=source,
+                status="ok" if result else "empty",
+                message=f"Fetched {len(result)} of {limit} requested jobs for {title}",
+            )
+        )
     if not collected and "demo" not in request.sources:
         db.add(SourceLog(run_id=run.id, source="search", status="empty", message="No jobs were collected from selected live sources. Demo was not selected, so no fallback demo postings were used."))
 
@@ -136,6 +144,19 @@ async def run_analysis(db: Session, request: SearchRunCreate) -> JobSearchRun:
     db.commit()
     db.refresh(run)
     return run
+
+
+def missing_requirements(settings, source: str) -> str | None:
+    """Return why a live source cannot run, or None when it is configured."""
+    if source == "adzuna" and (not settings.adzuna_app_id or not settings.adzuna_app_key):
+        return "Missing ADZUNA_APP_ID or ADZUNA_APP_KEY."
+    if source == "usajobs" and (not settings.usa_jobs_email or not settings.usa_jobs_api_key):
+        return "Missing USA_JOBS_EMAIL or USA_JOBS_API_KEY."
+    if source == "greenhouse" and not (settings.greenhouse_board_slugs or settings.greenhouse_board_slugs_file):
+        return "Missing GREENHOUSE_BOARD_SLUGS or GREENHOUSE_BOARD_SLUGS_FILE. Use public board slugs from boards.greenhouse.io URLs."
+    if source == "lever" and not (settings.lever_company_names or settings.lever_company_names_file):
+        return "Missing LEVER_COMPANY_NAMES or LEVER_COMPANY_NAMES_FILE. Use public company slugs from jobs.lever.co URLs."
+    return None
 
 
 def demo_reason(request: SearchRunCreate, demo_jobs_present: bool) -> str | None:

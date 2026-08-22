@@ -53,7 +53,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       headers: {"Content-Type": "application/json", ...(init?.headers ?? {})}
     });
   } catch {
-    throw new Error("Cannot reach the backend API. Start it with `uvicorn app.main:app` from the backend folder, then try again.");
+    throw new Error(
+      process.env.NODE_ENV === "development"
+        ? "Cannot reach the backend API. Start it with `uvicorn app.main:app` from the backend folder, then try again."
+        : "Cannot reach the backend API. Check /health and the deployment logs for the api/index.py function."
+    );
   }
   if (!response.ok) {
     const message = await response.text();

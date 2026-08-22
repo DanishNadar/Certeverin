@@ -19,11 +19,14 @@ uvicorn app.main:app --reload
 
 ## Frontend
 
+The Next.js app lives at the repository root.
+
 ```powershell
-cd frontend
 npm install
 npm run dev
 ```
+
+`next.config.ts` proxies `/api/*` to the local backend, so no `NEXT_PUBLIC_API_BASE` is needed. Point `API_PROXY_TARGET` elsewhere if uvicorn is not on `http://127.0.0.1:8000`.
 
 ## Tests
 
@@ -31,6 +34,10 @@ npm run dev
 cd backend
 pytest
 ```
+
+## Deploying to Vercel
+
+See [deploy-vercel.md](deploy-vercel.md).
 
 ## Docker
 

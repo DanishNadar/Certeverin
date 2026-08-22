@@ -6,11 +6,13 @@ import {generateReport, createRun, getCertifications, getSkills, API_BASE, type 
 import {CertificationProviderChart, CertificationScoreChart, RequiredPreferredChart, SkillCategoryChart, TopSkillsChart} from "@/charts/SkillCharts";
 
 const SOURCE_OPTIONS = ["adzuna", "usajobs", "greenhouse", "lever"];
+// A deployed run has to finish inside the serverless function timeout
+// (300s on Vercel), so the defaults stay modest. Raise them for local runs.
 const DEFAULT_SOURCE_LIMITS: Record<string, number> = {
-  adzuna: 250,
-  usajobs: 250,
-  greenhouse: 250,
-  lever: 250
+  adzuna: 50,
+  usajobs: 50,
+  greenhouse: 50,
+  lever: 50
 };
 
 function formatPercent(value: number) {
@@ -144,7 +146,7 @@ export function Dashboard() {
           <div className="mt-4">
             <div className="mb-2 flex items-end justify-between gap-3">
               <p className="text-sm font-medium">Sources and posting targets</p>
-              <p className={`text-xs ${textMuted}`}>Higher values may take longer</p>
+              <p className={`text-xs ${textMuted}`}>Higher values take longer and can time out</p>
             </div>
             {SOURCE_OPTIONS.map((source) => (
               <div key={source} className="mb-2 grid grid-cols-[1fr_116px] items-center gap-3 text-sm">

@@ -1,4 +1,6 @@
+from io import BytesIO
 from pathlib import Path
+from typing import IO
 
 from reportlab.graphics.charts.barcharts import HorizontalBarChart, VerticalBarChart
 from reportlab.graphics.shapes import Drawing
@@ -22,18 +24,25 @@ def generate_pdf(db: Session, run_id: int) -> ReportExport:
     if not run:
         raise ValueError("Search run not found")
     settings = get_settings()
+    buffer = BytesIO()
+    build_report(db, run, buffer)
+    data = buffer.getvalue()
     output = settings.reports_dir / f"certeverin-run-{run_id}.pdf"
-    build_report(db, run, output)
-    export = ReportExport(run_id=run_id, file_path=str(output), format="pdf")
+    try:
+        output.write_bytes(data)
+        file_path = str(output)
+    except OSError:
+        file_path = ""
+    export = ReportExport(run_id=run_id, file_path=file_path, format="pdf", content=data)
     db.add(export)
     db.commit()
     db.refresh(export)
     return export
 
 
-def build_report(db: Session, run: JobSearchRun, output: Path) -> None:
+def build_report(db: Session, run: JobSearchRun, target: Path | str | IO[bytes]) -> None:
     styles = getSampleStyleSheet()
-    doc = SimpleDocTemplate(str(output), pagesize=letter, title="Certeverin Funding Recommendation")
+    doc = SimpleDocTemplate(str(target) if isinstance(target, (Path, str)) else target, pagesize=letter, title="Certeverin Funding Recommendation")
     jobs = db.query(JobPosting).filter_by(run_id=run.id).all()
     logs = db.query(SourceLog).filter_by(run_id=run.id).all()
     skills = skill_statistics(db, run.id)

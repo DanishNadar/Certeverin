@@ -1,0 +1,14 @@
+# Keep the deployment bundle small. Nothing here is needed to build or run.
+*.db
+.venv/
+venv/
+__pycache__/
+**/__pycache__/
+*.egg-info/
+.pytest_cache/
+backend/tests/
+backend/generated_reports/
+backend/alembic/
+docs/
+docker-compose.yml
+certeverin/

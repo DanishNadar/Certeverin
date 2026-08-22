@@ -21,15 +21,15 @@ $env:WATCHFILES_FORCE_POLLING="true"
 uvicorn app.main:app --reload
 ```
 
-In another terminal:
+In another terminal, from the repository root:
 
 ```powershell
-cd frontend
 npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. The API runs at `http://127.0.0.1:8000`.
+Open `http://localhost:3000`. The API runs at `http://127.0.0.1:8000`, and the
+dashboard reaches it through the `/api/*` rewrite in `next.config.ts`.
 
 ## CLI Commands
 
@@ -44,9 +44,18 @@ certeverin export-report --run-id 1 --format pdf
 
 The generated PDF is written under `backend/generated_reports/`.
 
+## Layout
+
+```
+app/ components/ charts/ lib/   Next.js dashboard (repository root)
+api/index.py                    Vercel Python function -> FastAPI
+backend/app/                    FastAPI package
+shared/                         skill taxonomy, certification catalog, weights
+```
+
 ## Environment
 
-Copy `.env.example` to `backend/.env` for local backend settings.
+Copy `.env.example` to `.env` for local settings.
 
 Required only for live sources:
 
@@ -55,7 +64,20 @@ Required only for live sources:
 - `USA_JOBS_EMAIL`
 - `USA_JOBS_API_KEY`
 
-The default database is SQLite for local setup. Use `DATABASE_URL=postgresql+psycopg://...` for PostgreSQL.
+The default database is SQLite for local setup. Use `DATABASE_URL=postgresql+psycopg://...`
+for PostgreSQL; `postgres://` and `postgresql://` strings from hosted providers are
+accepted and normalized automatically.
+
+`NEXT_PUBLIC_API_BASE` is no longer needed — the dashboard calls the API
+same-origin. Set `API_PROXY_TARGET` only if uvicorn is not on `http://127.0.0.1:8000`.
+
+## Deployment
+
+Certeverin deploys to Vercel as a single project: the Next.js dashboard plus the
+FastAPI backend as a Python serverless function. It needs a Postgres database,
+because the function filesystem is read-only and per-instance.
+
+See [docs/deploy-vercel.md](docs/deploy-vercel.md) for the full walkthrough.
 
 ## API
 
@@ -70,6 +92,8 @@ The default database is SQLite for local setup. Use `DATABASE_URL=postgresql+psy
 - `GET /api/certifications`
 - `POST /api/certifications/refresh`
 - `POST /api/skills/normalize`
+- `GET /health` and `GET /api/health`
+- `POST /api/admin/bootstrap`
 
 ## Scoring
 
