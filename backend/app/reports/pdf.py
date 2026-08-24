@@ -998,13 +998,4 @@ def methodology_section(run: JobSearchRun, jobs: list, logs: list, summary: dict
         )
     )
 
-    story.append(para("What this report cannot tell you", styles["h1"]))
-    for text in [
-        "It measures what employers wrote in job postings, not what they actually pay for or interview on.",
-        "A certification cannot be proven to cause a job offer. These scores rank relevance, not outcomes.",
-        "The sample is limited to the sources and posting count listed above. A larger, more regional sample can change the ranking.",
-        "Skills are matched with a published taxonomy of names and aliases, so an unusual phrasing may be missed.",
-        "Costs and exam status come from provider pages captured in the catalog and should be re-checked before payment.",
-    ]:
-        story.append(Paragraph(f"&bull;&nbsp;&nbsp;{escape(text)}", styles["bullet"]))
     return story
